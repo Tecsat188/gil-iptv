@@ -60,9 +60,17 @@
                 { fps: 10, qrbox: { width: 250, height: 250 } },
                 (decodedText) => {
                     // SUCESSO AO LER O QR CODE
-                    document.getElementById('id').value = decodedText;
+                    let idLido = decodedText;
+
+                    // Se o QR Code tiver o link completo, extrai apenas o ID
+                    if (decodedText.includes("?id=")) {
+                        const urlParams = new URLSearchParams(decodedText.split('?')[1]);
+                        idLido = urlParams.get('id');
+                    }
+
+                    document.getElementById('id').value = idLido;
                     fecharScanner();
-                    alert("ID Lido com sucesso: " + decodedText);
+                    alert("ID Lido com sucesso: " + idLido);
                 },
                 (errorMessage) => {
                     // Ignora os erros de leitura contínua
@@ -79,6 +87,18 @@
                     html5QrcodeScanner.clear();
                     document.getElementById('reader').style.display = 'none';
                 }).catch(err => console.log(err));
+            }
+        }
+
+        // ✅ NOVO: Verifica se o link aberto tem o parâmetro ?id=
+        function checarLinkDireto() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const idDaUrl = urlParams.get('id');
+            
+            if (idDaUrl) {
+                document.getElementById('id').value = idDaUrl;
+                // Limpa a URL para não ficar com ?id= na barra de endereços
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
         }
 
@@ -142,7 +162,9 @@
             downloadAnchorNode.remove();
         }
 
+        // Executa ao carregar a página
         renderizar();
+        checarLinkDireto();
     </script>
 </body>
 </html>
