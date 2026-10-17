@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel GIL IPTV</title>
+    <!-- Biblioteca para ler QR Code -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; }
-        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: none; }
+        input, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 5px; border: none; font-size: 14px; box-sizing: border-box;}
         input { background: #222; color: #fff; }
         button { background: #0B8431; color: #fff; font-weight: bold; cursor: pointer; }
         .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
         .btn-danger { background: #E92B5D; }
+        .btn-scan { background: #FFC527; color: #000; margin-bottom: 10px;}
+        #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 2px solid #0B8431; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -18,30 +22,76 @@
 
     <div class="cliente-card">
         <h3>Adicionar/Atualizar Cliente</h3>
-        <input type="text" id="id" placeholder="ID do Aparelho (Firebase ID)">
+        
+        <!-- BOTÃO DE ESCANEAR QR CODE -->
+        <button onclick="abrirScanner()" class="btn-scan">📷 Escanear QR Code do App</button>
+        <div id="reader"></div>
+
+        <input type="text" id="id" placeholder="ID do Aparelho (ou escaneie acima)">
         <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
         <input type="text" id="user" placeholder="Usuário">
         <input type="text" id="pass" placeholder="Senha">
-        <label><input type="checkbox" id="bloqueado"> Bloquear este cliente?</label>
-        <button onclick="salvar()">Salvar Cliente</button>
+        <label style="display:block; margin-top:10px;"><input type="checkbox" id="bloqueado" style="width:auto; margin-right:10px;"> Bloquear este cliente?</label>
+        <button onclick="salvar()" style="margin-top:10px;">Salvar Cliente</button>
     </div>
 
     <h3>Clientes Cadastrados</h3>
     <div id="listaClientes"></div>
 
-    <button onclick="baixarJSON()" style="background: #FFC527; color: #000;">Baixar arquivo JSON</button>
+    <button onclick="baixarJSON()" style="background: #FFC527; color: #000; margin-top: 20px;">Baixar arquivo JSON</button>
 
     <script>
         let dados = JSON.parse(localStorage.getItem('gil_dados')) || { clientes: {} };
+        let html5QrcodeScanner = null;
 
+        // --- LÓGICA DO SCANNER DE QR CODE ---
+        function abrirScanner() {
+            const reader = document.getElementById('reader');
+            if (reader.style.display === 'block') {
+                fecharScanner();
+                return;
+            }
+            
+            reader.style.display = 'block';
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            html5QrcodeScanner.start(
+                { facingMode: "environment" }, // Câmera traseira
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    // SUCESSO AO LER O QR CODE
+                    document.getElementById('id').value = decodedText;
+                    fecharScanner();
+                    alert("ID Lido com sucesso: " + decodedText);
+                },
+                (errorMessage) => {
+                    // Ignora os erros de leitura contínua
+                }
+            ).catch((err) => {
+                alert("Erro ao abrir câmera: " + err);
+                fecharScanner();
+            });
+        }
+
+        function fecharScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    document.getElementById('reader').style.display = 'none';
+                }).catch(err => console.log(err));
+            }
+        }
+
+        // --- LÓGICA DO PAINEL ---
         function renderizar() {
             const div = document.getElementById('listaClientes');
             div.innerHTML = '';
             for (const [id, cliente] of Object.entries(dados.clientes)) {
                 const status = cliente.bloqueado ? '🔴 BLOQUEADO' : '🟢 LIBERADO';
+                const idCurto = id.substring(0, 8) + '...' + id.substring(id.length - 4);
                 div.innerHTML += `
                     <div class="cliente-card">
-                        <strong>ID: ${id}</strong><br>
+                        <strong>ID: ${idCurto}</strong><br>
                         Servidor: ${cliente.server}<br>
                         User: ${cliente.username}<br>
                         Status: ${status}<br>
@@ -53,7 +103,7 @@
 
         function salvar() {
             const id = document.getElementById('id').value.trim();
-            if(!id) return alert('Digite o ID!');
+            if(!id) return alert('Digite o ID ou escaneie o QR Code!');
             
             dados.clientes[id] = {
                 bloqueado: document.getElementById('bloqueado').checked,
@@ -62,6 +112,14 @@
                 password: document.getElementById('pass').value.trim()
             };
             localStorage.setItem('gil_dados', JSON.stringify(dados));
+            
+            // Limpa os campos
+            document.getElementById('id').value = '';
+            document.getElementById('server').value = '';
+            document.getElementById('user').value = '';
+            document.getElementById('pass').value = '';
+            document.getElementById('bloqueado').checked = false;
+            
             renderizar();
             alert('Salvo com sucesso! Não esqueça de baixar o JSON.');
         }
