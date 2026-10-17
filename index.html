@@ -1,0 +1,78 @@
+package com.gil.iptv.helper;
+
+import android.content.Context;
+import android.util.Log;
+import com.google.firebase.installations.FirebaseInstallations;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class SyncHelper {
+
+    private static final String TAG = "SyncHelper";
+    
+    // ⚠️ COLOQUE AQUI O LINK DO SEU GITHUB PAGES
+    private static final String URL_JSON = "https://SEU_USUARIO.github.io/gil-iptv/lista.json";
+
+    public interface Callback {
+        void onSync(boolean bloqueado, String mensagem);
+    }
+
+    public static void sincronizar(final Context context, final Callback callback) {
+        // 1. Pega o ID único do celular
+        FirebaseInstallations.getInstance().getId().addOnCompleteListener(task -> {
+            if (!task.isSuccessful() || task.getResult() == null) {
+                callback.onSync(false, ""); // Se falhar o ID, segue o fluxo
+                return;
+            }
+            final String meuId = task.getResult();
+
+            // 2. Busca o JSON na internet em uma Thread separada
+            new Thread(() -> {
+                try {
+                    URL url = new URL(URL_JSON + "?t=" + System.currentTimeMillis()); // Cache buster
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(5000);
+
+                    if (conn.getResponseCode() == 200) {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        StringBuilder sb = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) sb.append(line);
+                        reader.close();
+
+                        JSONObject root = new JSONObject(sb.toString());
+                        JSONObject clientes = root.optJSONObject("clientes");
+
+                        if (clientes != null && clientes.has(meuId)) {
+                            JSONObject meuDados = clientes.getJSONObject(meuId);
+                            boolean bloqueado = meuDados.optBoolean("bloqueado", false);
+                            String server = meuDados.optString("server", "");
+                            String user = meuDados.optString("username", "");
+                            String pass = meuDados.optString("password", "");
+
+                            // Se a lista veio preenchida, atualiza o app
+                            if (!server.isEmpty() && !user.isEmpty() && !pass.isEmpty()) {
+                                PreferenceHelper pref = new PreferenceHelper(context);
+                                pref.setSharedPreferenceServerUrl(server);
+                                pref.setSharedPreferenceUsername(user);
+                                pref.setSharedPreferencePassword(pass);
+                                Log.d(TAG, "Lista atualizada via sync!");
+                            }
+
+                            callback.onSync(bloqueado, "Sua lista foi suspensa ou atualizada pelo administrador.");
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Erro no sync: " + e.getMessage());
+                }
+                // Se não achou o ID ou deu erro, segue o fluxo normal
+                callback.onSync(false, "");
+            }).start();
+        });
+    }
+}
