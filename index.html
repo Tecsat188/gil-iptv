@@ -1,78 +1,90 @@
-package com.gil.iptv.helper;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel GIL IPTV</title>
+    <style>
+        body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: none; }
+        input { background: #222; color: #fff; }
+        button { background: #0B8431; color: #fff; font-weight: bold; cursor: pointer; }
+        .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        .btn-danger { background: #E92B5D; }
+    </style>
+</head>
+<body>
+    <h2>Painel de Controle GIL IPTV</h2>
 
-import android.content.Context;
-import android.util.Log;
-import com.google.firebase.installations.FirebaseInstallations;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+    <div class="cliente-card">
+        <h3>Adicionar/Atualizar Cliente</h3>
+        <input type="text" id="id" placeholder="ID do Aparelho (Firebase ID)">
+        <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
+        <input type="text" id="user" placeholder="Usuário">
+        <input type="text" id="pass" placeholder="Senha">
+        <label><input type="checkbox" id="bloqueado"> Bloquear este cliente?</label>
+        <button onclick="salvar()">Salvar Cliente</button>
+    </div>
 
-public class SyncHelper {
+    <h3>Clientes Cadastrados</h3>
+    <div id="listaClientes"></div>
 
-    private static final String TAG = "SyncHelper";
-    
-    // ⚠️ COLOQUE AQUI O LINK DO SEU GITHUB PAGES
-    private static final String URL_JSON = "https://SEU_USUARIO.github.io/gil-iptv/lista.json";
+    <button onclick="baixarJSON()" style="background: #FFC527; color: #000;">Baixar arquivo JSON</button>
 
-    public interface Callback {
-        void onSync(boolean bloqueado, String mensagem);
-    }
+    <script>
+        let dados = JSON.parse(localStorage.getItem('gil_dados')) || { clientes: {} };
 
-    public static void sincronizar(final Context context, final Callback callback) {
-        // 1. Pega o ID único do celular
-        FirebaseInstallations.getInstance().getId().addOnCompleteListener(task -> {
-            if (!task.isSuccessful() || task.getResult() == null) {
-                callback.onSync(false, ""); // Se falhar o ID, segue o fluxo
-                return;
+        function renderizar() {
+            const div = document.getElementById('listaClientes');
+            div.innerHTML = '';
+            for (const [id, cliente] of Object.entries(dados.clientes)) {
+                const status = cliente.bloqueado ? '🔴 BLOQUEADO' : '🟢 LIBERADO';
+                div.innerHTML += `
+                    <div class="cliente-card">
+                        <strong>ID: ${id}</strong><br>
+                        Servidor: ${cliente.server}<br>
+                        User: ${cliente.username}<br>
+                        Status: ${status}<br>
+                        <button onclick="remover('${id}')" class="btn-danger" style="margin-top:10px;">Remover Cliente</button>
+                    </div>
+                `;
             }
-            final String meuId = task.getResult();
+        }
 
-            // 2. Busca o JSON na internet em uma Thread separada
-            new Thread(() -> {
-                try {
-                    URL url = new URL(URL_JSON + "?t=" + System.currentTimeMillis()); // Cache buster
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(5000);
+        function salvar() {
+            const id = document.getElementById('id').value.trim();
+            if(!id) return alert('Digite o ID!');
+            
+            dados.clientes[id] = {
+                bloqueado: document.getElementById('bloqueado').checked,
+                server: document.getElementById('server').value.trim(),
+                username: document.getElementById('user').value.trim(),
+                password: document.getElementById('pass').value.trim()
+            };
+            localStorage.setItem('gil_dados', JSON.stringify(dados));
+            renderizar();
+            alert('Salvo com sucesso! Não esqueça de baixar o JSON.');
+        }
 
-                    if (conn.getResponseCode() == 200) {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        StringBuilder sb = new StringBuilder();
-                        String line;
-                        while ((line = reader.readLine()) != null) sb.append(line);
-                        reader.close();
+        function remover(id) {
+            if(confirm('Remover cliente ' + id + '?')) {
+                delete dados.clientes[id];
+                localStorage.setItem('gil_dados', JSON.stringify(dados));
+                renderizar();
+            }
+        }
 
-                        JSONObject root = new JSONObject(sb.toString());
-                        JSONObject clientes = root.optJSONObject("clientes");
+        function baixarJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "lista.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
 
-                        if (clientes != null && clientes.has(meuId)) {
-                            JSONObject meuDados = clientes.getJSONObject(meuId);
-                            boolean bloqueado = meuDados.optBoolean("bloqueado", false);
-                            String server = meuDados.optString("server", "");
-                            String user = meuDados.optString("username", "");
-                            String pass = meuDados.optString("password", "");
-
-                            // Se a lista veio preenchida, atualiza o app
-                            if (!server.isEmpty() && !user.isEmpty() && !pass.isEmpty()) {
-                                PreferenceHelper pref = new PreferenceHelper(context);
-                                pref.setSharedPreferenceServerUrl(server);
-                                pref.setSharedPreferenceUsername(user);
-                                pref.setSharedPreferencePassword(pass);
-                                Log.d(TAG, "Lista atualizada via sync!");
-                            }
-
-                            callback.onSync(bloqueado, "Sua lista foi suspensa ou atualizada pelo administrador.");
-                            return;
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Erro no sync: " + e.getMessage());
-                }
-                // Se não achou o ID ou deu erro, segue o fluxo normal
-                callback.onSync(false, "");
-            }).start();
-        });
-    }
-}
+        renderizar();
+    </script>
+</body>
+</html>
