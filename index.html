@@ -6,16 +6,20 @@
     <title>Painel GIL IPTV</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; }
+        body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; padding-bottom: 50px;}
         input, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 5px; border: none; font-size: 14px; box-sizing: border-box;}
         input { background: #222; color: #fff; }
         button { background: #0B8431; color: #fff; font-weight: bold; cursor: pointer; }
-        .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.2s;}
+        .cliente-card:active { background: #222; }
         .btn-danger { background: #E92B5D; }
+        .btn-warning { background: #FFC527; color: #000; }
         .btn-scan { background: #FFC527; color: #000; margin-bottom: 10px;}
         .btn-save { background: #0B8431; margin-top: 10px; }
         #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 2px solid #0B8431; border-radius: 10px; }
         .config-box { background: #1A1A1A; border: 1px solid #FFC527; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .status-block { color: #E92B5D; font-weight: bold; }
+        .status-ok { color: #0B8431; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -29,23 +33,28 @@
         <button onclick="salvarToken()">Salvar Token</button>
     </div>
 
-    <div class="cliente-card">
-        <h3>Adicionar/Atualizar Cliente</h3>
+    <div class="cliente-card" id="form-card" style="cursor: default;">
+        <h3 id="form-title">Adicionar Novo Cliente</h3>
+        
         <button onclick="abrirScanner()" class="btn-scan">📷 Escanear QR Code do App</button>
         <div id="reader"></div>
+        
         <input type="text" id="id" placeholder="ID do Aparelho">
         <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
         <input type="text" id="user" placeholder="Usuário">
         <input type="text" id="pass" placeholder="Senha">
         <label style="display:block; margin-top:10px;"><input type="checkbox" id="bloqueado" style="width:auto; margin-right:10px;"> Bloquear este cliente?</label>
-        <button onclick="salvar()" class="btn-save">Salvar e Publicar no GitHub 🚀</button>
-        <p id="status-msg" style="text-align:center; margin-top:10px; color: #0B8431; font-weight: bold;"></p>
+        
+        <button onclick="salvar()" class="btn-save" id="btn-save-form">Salvar e Publicar no GitHub 🚀</button>
+        <button onclick="limparFormulario()" style="background: #444; display: none;" id="btn-cancel-edit">Cancelar Edição</button>
+        
+        <p id="status-msg" style="text-align:center; margin-top:10px; font-weight: bold;"></p>
     </div>
 
-    <h3>Clientes Cadastrados</h3>
+    <h3>Clientes Cadastrados (Toque para gerenciar)</h3>
     <div id="listaClientes"></div>
 
-    <button onclick="baixarJSON()" style="background: #FFC527; color: #000; margin-top: 20px;">Baixar arquivo JSON (Manual)</button>
+    <button onclick="baixarJSON()" style="background: #333; color: #fff; margin-top: 20px;">Baixar arquivo JSON (Backup Manual)</button>
 
     <script>
         // --- CONFIGURAÇÃO DO GITHUB ---
@@ -60,8 +69,7 @@
         function carregarToken() {
             const token = localStorage.getItem('github_token');
             if (token) {
-                document.getElementById('token').value = token;
-                document.getElementById('config-box').style.display = 'none'; // Esconde se já tiver token
+                document.getElementById('config-box').style.display = 'none';
             }
         }
 
@@ -79,10 +87,7 @@
         // --- LÓGICA DO SCANNER DE QR CODE ---
         function abrirScanner() {
             const reader = document.getElementById('reader');
-            if (reader.style.display === 'block') {
-                fecharScanner();
-                return;
-            }
+            if (reader.style.display === 'block') { fecharScanner(); return; }
             
             reader.style.display = 'block';
             html5QrcodeScanner = new Html5Qrcode("reader");
@@ -130,31 +135,82 @@
             const div = document.getElementById('listaClientes');
             div.innerHTML = '';
             for (const [id, cliente] of Object.entries(dados.clientes)) {
-                const status = cliente.bloqueado ? '🔴 BLOQUEADO' : '🟢 LIBERADO';
+                const statusHtml = cliente.bloqueado 
+                    ? '<span class="status-block">🔴 BLOQUEADO</span>' 
+                    : '<span class="status-ok">🟢 LIBERADO</span>';
+                
                 const idCurto = id.substring(0, 8) + '...' + id.substring(id.length - 4);
+                
                 div.innerHTML += `
-                    <div class="cliente-card">
+                    <div class="cliente-card" onclick="abrirMenu('${id}')">
                         <strong>ID: ${idCurto}</strong><br>
                         Servidor: ${cliente.server}<br>
                         User: ${cliente.username}<br>
-                        Status: ${status}<br>
-                        <button onclick="remover('${id}')" class="btn-danger" style="margin-top:10px;">Remover Cliente</button>
+                        Status: ${statusHtml}<br>
+                        <span style="font-size: 10px; color: #888;">(Toque para editar/bloquear)</span>
                     </div>
                 `;
             }
         }
 
-        // ✅ FUNÇÃO MÁGICA: Salva e Publica no GitHub
+        // ✅ NOVO MENU DE AÇÕES
+        function abrirMenu(id) {
+            const cliente = dados.clientes[id];
+            if (!cliente) return;
+
+            const idCurto = id.substring(0, 8) + '...' + id.substring(id.length - 4);
+            
+            // Cria o prompt de opções usando a função nativa do navegador
+            let opcoes = `Gerenciar Cliente: ${idCurto}\n\n`;
+            opcoes += `1 - ${cliente.bloqueado ? 'Desbloquear Acesso' : 'Bloquear Acesso'}\n`;
+            opcoes += `2 - Editar Lista (Servidor/User/Senha)\n`;
+            opcoes += `3 - Remover Cliente\n\n`;
+            opcoes += `Digite o número da opção desejada:`;
+
+            const escolha = prompt(opcoes);
+
+            if (escolha === '1') {
+                // Inverte o bloqueio
+                dados.clientes[id].bloqueado = !dados.clientes[id].bloqueado;
+                publicarAutomatico("Status alterado!");
+            } else if (escolha === '2') {
+                // Preenche o formulário para edição
+                document.getElementById('id').value = id;
+                document.getElementById('server').value = cliente.server;
+                document.getElementById('user').value = cliente.username;
+                document.getElementById('pass').value = cliente.password;
+                document.getElementById('bloqueado').checked = cliente.bloqueado;
+                
+                // Muda a interface do formulário
+                document.getElementById('form-title').innerText = "Editando: " + idCurto;
+                document.getElementById('btn-save-form').innerText = "Salvar Alterações 🚀";
+                document.getElementById('btn-cancel-edit').style.display = "block";
+                
+                // Rola a tela para o formulário
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (escolha === '3') {
+                if(confirm('Tem certeza que deseja REMOVER o cliente ' + idCurto + '?')) {
+                    delete dados.clientes[id];
+                    publicarAutomatico("Cliente removido!");
+                }
+            }
+        }
+
+        function limparFormulario() {
+            document.getElementById('id').value = '';
+            document.getElementById('server').value = '';
+            document.getElementById('user').value = '';
+            document.getElementById('pass').value = '';
+            document.getElementById('bloqueado').checked = false;
+            
+            document.getElementById('form-title').innerText = "Adicionar Novo Cliente";
+            document.getElementById('btn-save-form').innerText = "Salvar e Publicar no GitHub 🚀";
+            document.getElementById('btn-cancel-edit').style.display = "none";
+        }
+
         async function salvar() {
             const id = document.getElementById('id').value.trim();
-            const token = localStorage.getItem('github_token');
-            const statusMsg = document.getElementById('status-msg');
-
             if(!id) return alert('Digite o ID!');
-            if(!token) {
-                document.getElementById('config-box').style.display = 'block';
-                return alert('Você precisa configurar o Token do GitHub primeiro!');
-            }
             
             dados.clientes[id] = {
                 bloqueado: document.getElementById('bloqueado').checked,
@@ -162,18 +218,26 @@
                 username: document.getElementById('user').value.trim(),
                 password: document.getElementById('pass').value.trim()
             };
+            
+            limparFormulario();
+            publicarAutomatico("Dados salvos e publicados!");
+        }
+
+        // ✅ FUNÇÃO MÁGICA: Salva no LocalStorage e Publica no GitHub
+        async function publicarAutomatico(msgSucesso) {
             localStorage.setItem('gil_dados', JSON.stringify(dados));
-            
-            // Limpa os campos
-            document.getElementById('id').value = '';
-            document.getElementById('server').value = '';
-            document.getElementById('user').value = '';
-            document.getElementById('pass').value = '';
-            document.getElementById('bloqueado').checked = false;
-            
             renderizar();
 
-            // Envia pro GitHub
+            const token = localStorage.getItem('github_token');
+            const statusMsg = document.getElementById('status-msg');
+
+            if(!token) {
+                document.getElementById('config-box').style.display = 'block';
+                statusMsg.innerText = "❌ Token não configurado!";
+                statusMsg.style.color = "#E92B5D";
+                return alert('Configure o Token do GitHub primeiro!');
+            }
+
             statusMsg.innerText = "⏳ Publicando no GitHub...";
             statusMsg.style.color = "#FFC527";
 
@@ -181,23 +245,16 @@
             const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
 
             try {
-                // 1. Pega o SHA do arquivo atual (se existir)
                 let sha = null;
-                const getResponse = await fetch(url, {
-                    headers: { "Authorization": `token ${token}` }
-                });
+                const getResponse = await fetch(url, { headers: { "Authorization": `token ${token}` } });
                 if (getResponse.ok) {
                     const fileData = await getResponse.json();
                     sha = fileData.sha;
                 }
 
-                // 2. Envia a atualização
                 const putResponse = await fetch(url, {
                     method: 'PUT',
-                    headers: {
-                        "Authorization": `token ${token}`,
-                        "Content-Type": "application/json"
-                    },
+                    headers: { "Authorization": `token ${token}`, "Content-Type": "application/json" },
                     body: JSON.stringify({
                         message: "Atualizar lista via Painel Web",
                         content: conteudoBase64,
@@ -206,27 +263,17 @@
                 });
 
                 if (putResponse.ok) {
-                    statusMsg.innerText = "✅ Publicado no GitHub com sucesso!";
+                    statusMsg.innerText = "✅ " + msgSucesso;
                     statusMsg.style.color = "#0B8431";
-                    setTimeout(() => { statusMsg.innerText = ""; }, 3000);
+                    setTimeout(() => { statusMsg.innerText = ""; }, 4000);
                 } else {
                     const errorData = await putResponse.json();
-                    statusMsg.innerText = "❌ Erro ao publicar: " + errorData.message;
+                    statusMsg.innerText = "❌ Erro no GitHub: " + errorData.message;
                     statusMsg.style.color = "#E92B5D";
                 }
             } catch (e) {
                 statusMsg.innerText = "❌ Erro de conexão.";
                 statusMsg.style.color = "#E92B5D";
-            }
-        }
-
-        function remover(id) {
-            if(confirm('Remover cliente ' + id + '?')) {
-                delete dados.clientes[id];
-                localStorage.setItem('gil_dados', JSON.stringify(dados));
-                renderizar();
-                // Aqui você teria que clicar em salvar de novo para atualizar o GitHub
-                alert('Cliente removido da memória local. Para apagar do GitHub, clique em Salvar novamente.');
             }
         }
 
