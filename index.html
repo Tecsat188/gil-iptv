@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel GIL IPTV</title>
-    <!-- Biblioteca para ler QR Code -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; }
@@ -14,35 +13,68 @@
         .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
         .btn-danger { background: #E92B5D; }
         .btn-scan { background: #FFC527; color: #000; margin-bottom: 10px;}
+        .btn-save { background: #0B8431; margin-top: 10px; }
         #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 2px solid #0B8431; border-radius: 10px; }
+        .config-box { background: #1A1A1A; border: 1px solid #FFC527; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-    <h2>Painel de Controle GIL IPTV</h2>
+    <h2>Painel GIL IPTV</h2>
+
+    <!-- ⚙️ CONFIGURAÇÃO DO TOKEN -->
+    <div class="config-box" id="config-box">
+        <h3>⚙️ Configuração Inicial (Token GitHub)</h3>
+        <p style="font-size: 12px; color: #aaa;">Cole o seu Token do GitHub para habilitar o salvamento automático.</p>
+        <input type="password" id="token" placeholder="Cole seu Token (ghp_...) aqui">
+        <button onclick="salvarToken()">Salvar Token</button>
+    </div>
 
     <div class="cliente-card">
         <h3>Adicionar/Atualizar Cliente</h3>
-        
-        <!-- BOTÃO DE ESCANEAR QR CODE -->
         <button onclick="abrirScanner()" class="btn-scan">📷 Escanear QR Code do App</button>
         <div id="reader"></div>
-
-        <input type="text" id="id" placeholder="ID do Aparelho (ou escaneie acima)">
+        <input type="text" id="id" placeholder="ID do Aparelho">
         <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
         <input type="text" id="user" placeholder="Usuário">
         <input type="text" id="pass" placeholder="Senha">
         <label style="display:block; margin-top:10px;"><input type="checkbox" id="bloqueado" style="width:auto; margin-right:10px;"> Bloquear este cliente?</label>
-        <button onclick="salvar()" style="margin-top:10px;">Salvar Cliente</button>
+        <button onclick="salvar()" class="btn-save">Salvar e Publicar no GitHub 🚀</button>
+        <p id="status-msg" style="text-align:center; margin-top:10px; color: #0B8431; font-weight: bold;"></p>
     </div>
 
     <h3>Clientes Cadastrados</h3>
     <div id="listaClientes"></div>
 
-    <button onclick="baixarJSON()" style="background: #FFC527; color: #000; margin-top: 20px;">Baixar arquivo JSON</button>
+    <button onclick="baixarJSON()" style="background: #FFC527; color: #000; margin-top: 20px;">Baixar arquivo JSON (Manual)</button>
 
     <script>
+        // --- CONFIGURAÇÃO DO GITHUB ---
+        const GITHUB_USER = "Tecsat188";
+        const GITHUB_REPO = "gil-iptv";
+        const GITHUB_FILE = "lista.json";
+
         let dados = JSON.parse(localStorage.getItem('gil_dados')) || { clientes: {} };
         let html5QrcodeScanner = null;
+
+        // --- LÓGICA DO TOKEN ---
+        function carregarToken() {
+            const token = localStorage.getItem('github_token');
+            if (token) {
+                document.getElementById('token').value = token;
+                document.getElementById('config-box').style.display = 'none'; // Esconde se já tiver token
+            }
+        }
+
+        function salvarToken() {
+            const token = document.getElementById('token').value.trim();
+            if (token) {
+                localStorage.setItem('github_token', token);
+                document.getElementById('config-box').style.display = 'none';
+                alert('Token salvo com sucesso!');
+            } else {
+                alert('Por favor, cole um token válido.');
+            }
+        }
 
         // --- LÓGICA DO SCANNER DE QR CODE ---
         function abrirScanner() {
@@ -56,25 +88,19 @@
             html5QrcodeScanner = new Html5Qrcode("reader");
             
             html5QrcodeScanner.start(
-                { facingMode: "environment" }, // Câmera traseira
+                { facingMode: "environment" },
                 { fps: 10, qrbox: { width: 250, height: 250 } },
                 (decodedText) => {
-                    // SUCESSO AO LER O QR CODE
                     let idLido = decodedText;
-
-                    // Se o QR Code tiver o link completo, extrai apenas o ID
                     if (decodedText.includes("?id=")) {
                         const urlParams = new URLSearchParams(decodedText.split('?')[1]);
                         idLido = urlParams.get('id');
                     }
-
                     document.getElementById('id').value = idLido;
                     fecharScanner();
-                    alert("ID Lido com sucesso: " + idLido);
+                    alert("ID Lido: " + idLido);
                 },
-                (errorMessage) => {
-                    // Ignora os erros de leitura contínua
-                }
+                (errorMessage) => { }
             ).catch((err) => {
                 alert("Erro ao abrir câmera: " + err);
                 fecharScanner();
@@ -90,14 +116,11 @@
             }
         }
 
-        // ✅ NOVO: Verifica se o link aberto tem o parâmetro ?id=
         function checarLinkDireto() {
             const urlParams = new URLSearchParams(window.location.search);
             const idDaUrl = urlParams.get('id');
-            
             if (idDaUrl) {
                 document.getElementById('id').value = idDaUrl;
-                // Limpa a URL para não ficar com ?id= na barra de endereços
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         }
@@ -121,9 +144,17 @@
             }
         }
 
-        function salvar() {
+        // ✅ FUNÇÃO MÁGICA: Salva e Publica no GitHub
+        async function salvar() {
             const id = document.getElementById('id').value.trim();
-            if(!id) return alert('Digite o ID ou escaneie o QR Code!');
+            const token = localStorage.getItem('github_token');
+            const statusMsg = document.getElementById('status-msg');
+
+            if(!id) return alert('Digite o ID!');
+            if(!token) {
+                document.getElementById('config-box').style.display = 'block';
+                return alert('Você precisa configurar o Token do GitHub primeiro!');
+            }
             
             dados.clientes[id] = {
                 bloqueado: document.getElementById('bloqueado').checked,
@@ -141,7 +172,52 @@
             document.getElementById('bloqueado').checked = false;
             
             renderizar();
-            alert('Salvo com sucesso! Não esqueça de baixar o JSON.');
+
+            // Envia pro GitHub
+            statusMsg.innerText = "⏳ Publicando no GitHub...";
+            statusMsg.style.color = "#FFC527";
+
+            const conteudoBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 2))));
+            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
+
+            try {
+                // 1. Pega o SHA do arquivo atual (se existir)
+                let sha = null;
+                const getResponse = await fetch(url, {
+                    headers: { "Authorization": `token ${token}` }
+                });
+                if (getResponse.ok) {
+                    const fileData = await getResponse.json();
+                    sha = fileData.sha;
+                }
+
+                // 2. Envia a atualização
+                const putResponse = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        "Authorization": `token ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: "Atualizar lista via Painel Web",
+                        content: conteudoBase64,
+                        sha: sha 
+                    })
+                });
+
+                if (putResponse.ok) {
+                    statusMsg.innerText = "✅ Publicado no GitHub com sucesso!";
+                    statusMsg.style.color = "#0B8431";
+                    setTimeout(() => { statusMsg.innerText = ""; }, 3000);
+                } else {
+                    const errorData = await putResponse.json();
+                    statusMsg.innerText = "❌ Erro ao publicar: " + errorData.message;
+                    statusMsg.style.color = "#E92B5D";
+                }
+            } catch (e) {
+                statusMsg.innerText = "❌ Erro de conexão.";
+                statusMsg.style.color = "#E92B5D";
+            }
         }
 
         function remover(id) {
@@ -149,6 +225,8 @@
                 delete dados.clientes[id];
                 localStorage.setItem('gil_dados', JSON.stringify(dados));
                 renderizar();
+                // Aqui você teria que clicar em salvar de novo para atualizar o GitHub
+                alert('Cliente removido da memória local. Para apagar do GitHub, clique em Salvar novamente.');
             }
         }
 
@@ -162,7 +240,8 @@
             downloadAnchorNode.remove();
         }
 
-        // Executa ao carregar a página
+        // Executa ao carregar
+        carregarToken();
         renderizar();
         checarLinkDireto();
     </script>
