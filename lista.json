@@ -1,8 +1,8 @@
 {
   "clientes": {
     "cdS4RvvsSJitTqWQ0DLvbZ": {
-      "bloqueado": true,
-      "server": "http://ignafishtel.com",
+      "bloqueado": false,
+      "server": "http://ignafishtel.",
       "username": "289561666",
       "password": "f969B2783U"
     }
