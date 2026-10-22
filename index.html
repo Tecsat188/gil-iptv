@@ -39,6 +39,8 @@
         <button onclick="abrirScanner()" class="btn-scan">📷 Escanear QR Code do App</button>
         <div id="reader"></div>
         
+        <!-- ✅ NOVO CAMPO DE NOME -->
+        <input type="text" id="nome" placeholder="Nome do Cliente (Ex: João Silva)">
         <input type="text" id="id" placeholder="ID do Aparelho">
         <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
         <input type="text" id="user" placeholder="Usuário">
@@ -141,9 +143,13 @@
                 
                 const idCurto = id.substring(0, 8) + '...' + id.substring(id.length - 4);
                 
+                // ✅ Mostra o nome se existir, senão mostra só o ID
+                const nomeCliente = cliente.nome ? `<strong>${cliente.nome}</strong><br>` : '';
+                
                 div.innerHTML += `
                     <div class="cliente-card" onclick="abrirMenu('${id}')">
-                        <strong>ID: ${idCurto}</strong><br>
+                        ${nomeCliente}
+                        ID: ${idCurto}<br>
                         Servidor: ${cliente.server}<br>
                         User: ${cliente.username}<br>
                         Status: ${statusHtml}<br>
@@ -153,50 +159,53 @@
             }
         }
 
-        // ✅ NOVO MENU DE AÇÕES
+        // ✅ MENU DE AÇÕES ATUALIZADO
         function abrirMenu(id) {
             const cliente = dados.clientes[id];
             if (!cliente) return;
 
-            const idCurto = id.substring(0, 8) + '...' + id.substring(id.length - 4);
+            const nomeExibicao = cliente.nome ? cliente.nome : id.substring(0, 8) + '...';
             
-            // Cria o prompt de opções usando a função nativa do navegador
-            let opcoes = `Gerenciar Cliente: ${idCurto}\n\n`;
+            let opcoes = `Gerenciar: ${nomeExibicao}\n\n`;
             opcoes += `1 - ${cliente.bloqueado ? 'Desbloquear Acesso' : 'Bloquear Acesso'}\n`;
             opcoes += `2 - Editar Lista (Servidor/User/Senha)\n`;
-            opcoes += `3 - Remover Cliente\n\n`;
+            opcoes += `3 - Remover Cliente\n`;
+            opcoes += `4 - Editar Nome do Cliente\n\n`; // ✅ NOVA OPÇÃO
             opcoes += `Digite o número da opção desejada:`;
 
             const escolha = prompt(opcoes);
 
             if (escolha === '1') {
-                // Inverte o bloqueio
                 dados.clientes[id].bloqueado = !dados.clientes[id].bloqueado;
                 publicarAutomatico("Status alterado!");
             } else if (escolha === '2') {
-                // Preenche o formulário para edição
+                document.getElementById('nome').value = cliente.nome || '';
                 document.getElementById('id').value = id;
                 document.getElementById('server').value = cliente.server;
                 document.getElementById('user').value = cliente.username;
                 document.getElementById('pass').value = cliente.password;
                 document.getElementById('bloqueado').checked = cliente.bloqueado;
                 
-                // Muda a interface do formulário
-                document.getElementById('form-title').innerText = "Editando: " + idCurto;
+                document.getElementById('form-title').innerText = "Editando: " + nomeExibicao;
                 document.getElementById('btn-save-form').innerText = "Salvar Alterações 🚀";
                 document.getElementById('btn-cancel-edit').style.display = "block";
-                
-                // Rola a tela para o formulário
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             } else if (escolha === '3') {
-                if(confirm('Tem certeza que deseja REMOVER o cliente ' + idCurto + '?')) {
+                if(confirm('Tem certeza que deseja REMOVER o cliente ' + nomeExibicao + '?')) {
                     delete dados.clientes[id];
                     publicarAutomatico("Cliente removido!");
+                }
+            } else if (escolha === '4') { // ✅ NOVA AÇÃO DE EDITAR NOME
+                const novoNome = prompt("Digite o novo nome para " + nomeExibicao + ":", cliente.nome || "");
+                if (novoNome !== null) {
+                    dados.clientes[id].nome = novoNome.trim();
+                    publicarAutomatico("Nome atualizado!");
                 }
             }
         }
 
         function limparFormulario() {
+            document.getElementById('nome').value = '';
             document.getElementById('id').value = '';
             document.getElementById('server').value = '';
             document.getElementById('user').value = '';
@@ -213,6 +222,7 @@
             if(!id) return alert('Digite o ID!');
             
             dados.clientes[id] = {
+                nome: document.getElementById('nome').value.trim(), // ✅ Salva o nome
                 bloqueado: document.getElementById('bloqueado').checked,
                 server: document.getElementById('server').value.trim(),
                 username: document.getElementById('user').value.trim(),
@@ -223,7 +233,6 @@
             publicarAutomatico("Dados salvos e publicados!");
         }
 
-        // ✅ FUNÇÃO MÁGICA: Salva no LocalStorage e Publica no GitHub
         async function publicarAutomatico(msgSucesso) {
             localStorage.setItem('gil_dados', JSON.stringify(dados));
             renderizar();
