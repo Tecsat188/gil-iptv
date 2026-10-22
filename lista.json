@@ -1,3 +1,11 @@
 {
-  "clientes": {}
+  "clientes": {
+    "cD7h1NifSUuRawBR1YT-aF": {
+      "nome": "",
+      "bloqueado": false,
+      "server": "http://smalloutlett.com 253580568 X294H6832e",
+      "username": "253580568",
+      "password": "X294H6832e"
+    }
+  }
 }
