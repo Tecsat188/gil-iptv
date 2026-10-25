@@ -9,6 +9,7 @@
         body { font-family: sans-serif; background: #08070A; color: #fff; padding: 20px; padding-bottom: 50px;}
         input, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 5px; border: none; font-size: 14px; box-sizing: border-box;}
         input { background: #222; color: #fff; }
+        input:read-only { background: #333; color: #888; }
         button { background: #0B8431; color: #fff; font-weight: bold; cursor: pointer; }
         .cliente-card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.2s;}
         .cliente-card:active { background: #222; }
@@ -27,7 +28,6 @@
 <body>
     <h2>Painel GIL IPTV</h2>
 
-    <!-- ⚙️ CONFIGURAÇÃO DO TOKEN -->
     <div class="config-box" id="config-box">
         <h3>⚙️ Configuração Inicial (Token GitHub)</h3>
         <p style="font-size: 12px; color: #aaa;">Cole o seu Token do GitHub para habilitar o salvamento automático.</p>
@@ -42,7 +42,8 @@
         <div id="reader"></div>
         
         <input type="text" id="nome" placeholder="Nome do Cliente (Ex: João Silva)">
-        <input type="text" id="id" placeholder="ID do Aparelho">
+        <!-- ✅ Campo ID bloqueado por padrão para edição -->
+        <input type="text" id="id" placeholder="ID do Aparelho" readonly>
         <input type="text" id="server" placeholder="Servidor (Ex: http://servidor.com:8080)">
         <input type="text" id="user" placeholder="Usuário">
         <input type="text" id="pass" placeholder="Senha">
@@ -54,7 +55,6 @@
         <p id="status-msg" style="text-align:center; margin-top:10px; font-weight: bold;"></p>
     </div>
 
-    <!-- ✅ BOTÃO DE LOGINS RECENTES -->
     <button onclick="verLoginsRecentes()" style="background: #FFC527; color: #000; margin-bottom: 20px;">📋 Ver Últimos Logins (Automático)</button>
 
     <h3>Clientes Cadastrados (Toque para gerenciar)</h3>
@@ -184,6 +184,9 @@
                 dados.clientes[id].bloqueado = !dados.clientes[id].bloqueado;
                 publicarAutomatico("Status alterado!");
             } else if (escolha === '2') {
+                // ✅ TRAVA O ID PARA NÃO CRIAR DUPLICADO
+                document.getElementById('id').readOnly = true; 
+                
                 document.getElementById('nome').value = cliente.nome || '';
                 document.getElementById('id').value = id;
                 document.getElementById('server').value = cliente.server;
@@ -210,6 +213,7 @@
         }
 
         function limparFormulario() {
+            document.getElementById('id').readOnly = false; // ✅ DESTRAVA O ID
             document.getElementById('nome').value = '';
             document.getElementById('id').value = '';
             document.getElementById('server').value = '';
@@ -291,7 +295,6 @@
             }
         }
 
-        // ✅ FUNÇÃO PARA VER OS LOGINS RECENTES
         async function verLoginsRecentes() {
             const token = localStorage.getItem('github_token');
             if(!token) return alert("Configure o token primeiro!");
@@ -315,20 +318,21 @@
                 const logins = JSON.parse(jsonStr);
 
                 lista.innerHTML = "";
-                // Inverte para mostrar o mais recente primeiro
                 const entries = Object.entries(logins).reverse(); 
                 
                 if (entries.length === 0) {
                     lista.innerHTML = "<p>Nenhum login registrado ainda.</p>";
                 } else {
                     for (const [id, info] of entries) {
+                        // ✅ Agora passa a senha e mostra se já está cadastrado
+                        const jaCadastrado = dados.clientes[id] ? "(JÁ CADASTRADO)" : "";
                         lista.innerHTML += `
                             <div class="cliente-card" style="cursor:default;">
-                                <strong>ID: ${id}</strong><br>
+                                <strong>ID: ${id} ${jaCadastrado}</strong><br>
                                 Servidor: ${info.server}<br>
                                 Usuário: ${info.username}<br>
                                 <span style="color:#0B8431;">Data: ${info.data}</span>
-                                <button onclick="puxarParaEdicao('${id}', '${info.server}', '${info.username}')" style="background:#FFC527; color:#000; padding:5px; margin-top:5px;">Cadastrar este Cliente</button>
+                                <button onclick="puxarParaEdicao('${id}', '${info.server}', '${info.username}', '${info.password || ''}')" style="background:#FFC527; color:#000; padding:5px; margin-top:5px;">Cadastrar/Atualizar este Cliente</button>
                             </div>
                         `;
                     }
@@ -340,14 +344,22 @@
             }
         }
 
-        // ✅ FUNÇÃO PARA PUXAR O LOGIN PARA O FORMULÁRIO
-        function puxarParaEdicao(id, server, user) {
+        function puxarParaEdicao(id, server, user, pass) {
+            document.getElementById('id').readOnly = true; // ✅ Trava o ID
+            
             document.getElementById('id').value = id;
             document.getElementById('server').value = server;
             document.getElementById('user').value = user;
+            document.getElementById('pass').value = pass || '';
+            
+            document.getElementById('form-title').innerText = "Cadastrando Login de: " + id.substring(0, 8) + "...";
+            document.getElementById('btn-save-form').innerText = "Salvar e Publicar no GitHub 🚀";
+            document.getElementById('btn-cancel-edit').style.display = "block";
+            
             document.getElementById('modal-logins').style.display = 'none';
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            alert("Dados carregados no formulário! Agora digite o nome e a senha e clique em Salvar.");
+            
+            alert("Dados carregados! Agora preencha o Nome do cliente, confira a senha e clique em Salvar.");
         }
 
         function baixarJSON() {
