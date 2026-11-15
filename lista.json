@@ -41,6 +41,13 @@
       "server": "http://tobiofly.com",
       "username": "368309824",
       "password": "u726X9544j"
+    },
+    "evkSLMkYT3uVvvPmMpeCX6": {
+      "nome": "Gil celular",
+      "bloqueado": false,
+      "server": "http://tobiofly.com/get.php?username=187400571&password=V180R1382A&type=m3u_plus&output=hls",
+      "username": "187400571",
+      "password": "V180R1382A"
     }
   }
 }
