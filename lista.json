@@ -44,7 +44,7 @@
     },
     "c5dmuKbLTc2IC-WGSnF_La": {
       "nome": "Gil tv",
-      "bloqueado": false,
+      "bloqueado": true,
       "server": "http://peercast.sbs",
       "username": "84852170",
       "password": "16032006"
