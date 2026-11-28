@@ -44,7 +44,7 @@
     },
     "c5dmuKbLTc2IC-WGSnF_La": {
       "nome": "Giltv",
-      "bloqueado": true,
+      "bloqueado": false,
       "server": "http://restwrong.com",
       "username": "26122026",
       "password": "Y701x3745c"
